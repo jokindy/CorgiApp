@@ -1,53 +1,90 @@
 package com.andersen.dao;
 
 import com.andersen.domain.User;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
-import javax.sql.DataSource;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class UserDao implements CrudRepo {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final String url;
+    private final String username;
+    private final String password;
 
-    public UserDao(DataSource dataSource) {
-        this.jdbcTemplate = new JdbcTemplate(dataSource);
+    public UserDao(String url, String username, String password) {
+        this.url = url;
+        this.username = username;
+        this.password = password;
     }
 
     public void save(User user) {
-        SimpleJdbcInsert simpleJdbcInsert = new SimpleJdbcInsert(jdbcTemplate)
-                .withTableName("USERS")
-                .usingGeneratedKeyColumns("id");
-        long id = simpleJdbcInsert.executeAndReturnKey(user.toMap()).longValue();
-        user.setId(id);
+        String sql = String.format("INSERT INTO users(name, surname, age) VALUES ('%s', '%s', %s)",
+                user.getName(), user.getSurname(), user.getAge());
+        try (Connection connection = DriverManager.getConnection(url, username, password)) {
+            Statement statement = connection.createStatement();
+            int res = statement.executeUpdate(sql);
+            System.out.println("RES - " + res);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public User get(long userId) {
-        return jdbcTemplate.queryForObject("SELECT * FROM users WHERE id = ?", this::mapRowToUser, userId);
+        String sql = String.format("SELECT * FROM users WHERE id = %s", userId);
+        try (Connection connection = DriverManager.getConnection(url, username, password)) {
+            Statement statement = connection.createStatement();
+            ResultSet res = statement.executeQuery(sql);
+            List<User> users = mapRowToList(res);
+            return users.get(0);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public void update(User user) {
-        long userId = user.getId();
-        User userDb = get(userId);
-        if (userDb.equals(user)) {
-            throw new RuntimeException("You trying to update same user");
+    public List<User> getAll() {
+        try (Connection connection = DriverManager.getConnection(url, username, password)) {
+            Statement statement = connection.createStatement();
+            ResultSet res = statement.executeQuery("SELECT * FROM users");
+            return mapRowToList(res);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
-        jdbcTemplate.update("UPDATE users SET name = ?, surname = ?, age = ? WHERE id = ?",
-                user.getName(), user.getSurname(), user.getAge(), userId);
+    }
+
+
+    public void update(User user) {
+        String sql = String.format("UPDATE users SET name = '%s', surname = '%s', age = %s WHERE id = %s",
+                user.getName(), user.getSurname(), user.getAge(), user.getId());
+        try (Connection connection = DriverManager.getConnection(url, username, password)) {
+            Statement statement = connection.createStatement();
+            statement.executeUpdate(sql);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 
     public void delete(long userId) {
-        jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
+        String sql = String.format("DELETE FROM users WHERE id = %s", userId);
+        try (Connection connection = DriverManager.getConnection(url, username, password)) {
+            Statement statement = connection.createStatement();
+            statement.execute(sql);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    private User mapRowToUser(ResultSet userRows, int rowNum) throws SQLException {
-        int id = userRows.getInt("id");
-        String name = userRows.getString("name");
-        String surname = userRows.getString("surname");
-        int age = userRows.getInt("age");
-        return new User(id, name, surname, age);
+    private List<User> mapRowToList(ResultSet res) throws SQLException {
+        List<User> users = new ArrayList<>();
+        while (res.next()) {
+            int id = res.getInt("id");
+            String name = res.getString("name");
+            String surname = res.getString("surname");
+            int age = res.getInt("age");
+            User user = new User(id, name, surname, age);
+            users.add(user);
+        }
+        return users;
     }
 }
