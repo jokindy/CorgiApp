@@ -6,7 +6,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class UserRepositoryImpl implements UserRepository {
+public class UserRepositoryImpl implements com.andersen.corgiapp.repository.UserRepository {
 
     private final String url;
     private final String username;
